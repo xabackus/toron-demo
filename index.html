@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toron — AI-Coached Debate Practice</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ============================================================= -->
+  <!-- SETUP SCREEN                                                    -->
+  <!-- ============================================================= -->
+  <div id="setup-screen" class="screen active">
+    <div class="setup-card">
+      <h1 class="logo">Toron</h1>
+      <p class="tagline">AI-coached debate practice</p>
+
+      <div class="form-group">
+        <label for="api-key">OpenAI API Key</label>
+        <input id="api-key" type="password" placeholder="sk-..." autocomplete="off" />
+        <span class="hint">Not stored anywhere — sent per request only.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="topic">Debate Topic</label>
+        <input id="topic" type="text" placeholder='e.g. "Social media does more harm than good"' />
+      </div>
+
+      <div class="form-group">
+        <label>Your Side</label>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="side" value="for" checked /> For
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="side" value="against" /> Against
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="difficulty">Difficulty</label>
+        <select id="difficulty">
+          <option value="beginner">Beginner</option>
+          <option value="intermediate" selected>Intermediate</option>
+          <option value="advanced">Advanced</option>
+        </select>
+      </div>
+
+      <button id="start-btn" class="btn-primary" onclick="startDebate()">
+        Start Debate
+      </button>
+      <p id="setup-error" class="error"></p>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- DEBATE SCREEN                                                   -->
+  <!-- ============================================================= -->
+  <div id="debate-screen" class="screen">
+
+    <!-- Top bar -->
+    <header class="debate-header">
+      <div class="header-left">
+        <span class="logo-sm">Toron</span>
+        <span id="header-topic" class="header-topic"></span>
+      </div>
+      <div class="header-right">
+        <span id="turn-counter" class="turn-badge">Turn 1</span>
+        <button id="toggle-notes-btn" class="btn-ghost" onclick="toggleNotes()">
+          Notes ▸
+        </button>
+        <button class="btn-danger-sm" onclick="endDebate()">End Debate</button>
+      </div>
+    </header>
+
+    <div class="debate-body">
+
+      <!-- Chat panel -->
+      <div class="chat-panel">
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input-bar">
+          <textarea
+            id="user-input"
+            placeholder="Make your argument..."
+            rows="2"
+            onkeydown="handleInputKey(event)"
+          ></textarea>
+          <button id="send-btn" class="btn-primary btn-send" onclick="sendMessage()">
+            Send
+          </button>
+        </div>
+      </div>
+
+      <!-- Notes panel -->
+      <div id="notes-panel" class="notes-panel collapsed">
+        <h3 class="notes-title">Internal Notes</h3>
+        <p class="notes-subtitle">Alignment &amp; debugging view</p>
+
+        <div class="notes-section">
+          <h4>🟦 AI's Arguments</h4>
+          <ul id="notes-ai-points" class="notes-list">
+            <li class="empty">No arguments yet.</li>
+          </ul>
+        </div>
+
+        <div class="notes-section">
+          <h4>🟩 Student's Arguments</h4>
+          <ul id="notes-student-points" class="notes-list">
+            <li class="empty">No arguments yet.</li>
+          </ul>
+        </div>
+
+        <div class="notes-section">
+          <h4>📋 Coach Observations</h4>
+          <ul id="notes-coach-obs" class="notes-list">
+            <li class="empty">No observations yet.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- REPORT CARD MODAL                                               -->
+  <!-- ============================================================= -->
+  <div id="report-overlay" class="overlay">
+    <div class="report-card">
+      <h2>Report Card</h2>
+      <div id="report-grade" class="grade"></div>
+      <p id="report-summary" class="report-summary"></p>
+
+      <div id="report-scores" class="scores-grid"></div>
+
+      <div class="report-section">
+        <h4>💪 Strongest Moment</h4>
+        <p id="report-strength"></p>
+      </div>
+
+      <div class="report-section">
+        <h4>🎯 Biggest Area for Growth</h4>
+        <p id="report-weakness"></p>
+      </div>
+
+      <div class="report-section">
+        <h4>📝 Key Takeaways</h4>
+        <ul id="report-takeaways"></ul>
+      </div>
+
+      <button class="btn-primary" onclick="resetApp()">New Debate</button>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- LOADING OVERLAY                                                 -->
+  <!-- ============================================================= -->
+  <div id="loading-overlay" class="overlay loading-overlay">
+    <div class="spinner"></div>
+    <p id="loading-text">Thinking...</p>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
