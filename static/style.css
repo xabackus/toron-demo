@@ -571,6 +571,21 @@ body {
   margin-top: 20px;
 }
 
+.report-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.report-actions .btn-primary {
+  flex: 1;
+  margin-top: 0;
+}
+
+.report-actions .btn-ghost {
+  flex-shrink: 0;
+}
+
 
 /* ----------------------------------------------------------------
    Loading overlay
