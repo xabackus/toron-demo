@@ -5,6 +5,8 @@
 let sessionId = null;
 let apiKey = null;
 let notesOpen = false;
+let latestNotes = null;
+let debateTopic = "";
 
 
 /* ----------------------------------------------------------------
@@ -26,8 +28,6 @@ async function startDebate() {
   if (!apiKey) { errorEl.textContent = "API key is required."; return; }
   if (!topic) { errorEl.textContent = "Enter a debate topic."; return; }
 
-  showLoading("Preparing your opponent...");
-
   try {
     const res = await fetch("/api/start", {
       method: "POST",
@@ -47,20 +47,15 @@ async function startDebate() {
 
     const data = await res.json();
     sessionId = data.session_id;
+    debateTopic = topic;
 
-    // Switch screens
+    // Switch screens — chat is empty, student speaks first
     document.getElementById("setup-screen").classList.remove("active");
     document.getElementById("debate-screen").classList.add("active");
     document.getElementById("header-topic").textContent = topic;
-
-    // Render AI opening
-    appendAIMessage(data.debate_response, data.coach_feedback);
-    updateNotes(data.notes);
-    updateTurn(data.turn);
+    updateTurn(0);
   } catch (e) {
     errorEl.textContent = e.message;
-  } finally {
-    hideLoading();
   }
 }
 
@@ -130,6 +125,7 @@ async function endDebate() {
     }
 
     const data = await res.json();
+    if (data.notes) latestNotes = data.notes;
     renderReportCard(data.report);
   } catch (e) {
     alert("Failed to generate report: " + e.message);
@@ -206,6 +202,7 @@ function toggleNotes() {
 
 function updateNotes(notes) {
   if (!notes) return;
+  latestNotes = notes;
   renderNotesList("notes-ai-points", notes.ai_points);
   renderNotesList("notes-student-points", notes.student_points);
   renderNotesList("notes-coach-obs", notes.coach_observations);
@@ -290,11 +287,43 @@ function scoreColor(score) {
 
 
 /* ----------------------------------------------------------------
+   Notes download
+   ---------------------------------------------------------------- */
+
+function downloadNotes() {
+  if (!latestNotes) return;
+
+  const lines = [];
+  lines.push(`# Toron Debate Notes`);
+  lines.push(`**Topic:** ${debateTopic}\n`);
+
+  lines.push(`## AI's Arguments`);
+  (latestNotes.ai_points || []).forEach((p, i) => lines.push(`${i + 1}. ${p}`));
+
+  lines.push(`\n## Student's Arguments`);
+  (latestNotes.student_points || []).forEach((p, i) => lines.push(`${i + 1}. ${p}`));
+
+  lines.push(`\n## Coach Observations`);
+  (latestNotes.coach_observations || []).forEach((p, i) => lines.push(`${i + 1}. ${p}`));
+
+  const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "toron-debate-notes.md";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
+/* ----------------------------------------------------------------
    Utilities
    ---------------------------------------------------------------- */
 
 function resetApp() {
   sessionId = null;
+  latestNotes = null;
+  debateTopic = "";
   document.getElementById("report-overlay").classList.remove("active");
   document.getElementById("debate-screen").classList.remove("active");
   document.getElementById("setup-screen").classList.add("active");
