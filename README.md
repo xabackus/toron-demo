@@ -10,11 +10,9 @@ Built with **FastAPI** (Python) + vanilla HTML/CSS/JS. Uses **GPT-4o-mini** via 
 # Clone and install
 git clone https://github.com/xabackus/toron-demo.git
 cd toron-demo
-pip install -r requirements.txt
 
+pip install -r requirements.txt
 # Or if using pip3
-git clone https://github.com/xabackus/toron-demo.git
-cd toron-demo
 pip install -r requirements.txt
 
 # Run
