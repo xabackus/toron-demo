@@ -71,6 +71,7 @@
         <button id="toggle-notes-btn" class="btn-ghost" onclick="toggleNotes()">
           Notes ▸
         </button>
+        <button class="btn-ghost" onclick="downloadNotes()">⬇ Notes</button>
         <button class="btn-danger-sm" onclick="endDebate()">End Debate</button>
       </div>
     </header>
@@ -148,7 +149,10 @@
         <ul id="report-takeaways"></ul>
       </div>
 
-      <button class="btn-primary" onclick="resetApp()">New Debate</button>
+      <div class="report-actions">
+        <button class="btn-ghost" onclick="downloadNotes()">⬇ Download Notes</button>
+        <button class="btn-primary" onclick="resetApp()">New Debate</button>
+      </div>
     </div>
   </div>
 
