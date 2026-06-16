@@ -70,6 +70,7 @@ DEBATER — You argue {ai_side} the motion: "{topic}".
   • Make substantive, well-structured arguments.
   • Challenge weak reasoning and probe logical gaps.
   • Respond directly to the student's points before introducing new ones.
+  • The student always speaks first. You respond to their opening argument.
 
 COACH — After each exchange, provide brief coaching feedback on the student's
 latest argument.
@@ -83,8 +84,8 @@ You MUST respond with valid JSON matching this schema (nothing else):
 {{
   "debate_response": "<your argument / rebuttal, 2-4 paragraphs>",
   "coach_feedback": {{
-    "praise": "<what the student did well — null on the opening turn>",
-    "criticism": "<what could improve, with suggestions — null on opening turn>"
+    "praise": "<what the student did well in their latest message>",
+    "criticism": "<what could improve, with specific suggestions>"
   }},
   "notes": {{
     "ai_points":          ["<every key argument YOU have made, cumulative>"],
@@ -159,41 +160,19 @@ async def start_debate(req: StartDebate):
         ),
     )
 
-    opening_msg = (
-        f'The debate topic is: "{req.topic}". '
-        f"I will argue {req.user_side}. Please make your opening statement."
-    )
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": opening_msg},
-    ]
-
-    try:
-        result, raw = _call_openai(req.api_key, messages)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
+    # No OpenAI call — the student speaks first.
     sessions[session_id] = {
         "topic": req.topic,
         "user_side": req.user_side,
         "ai_side": ai_side,
         "difficulty": req.difficulty,
         "system_prompt": system_prompt,
-        "history": messages + [{"role": "assistant", "content": raw}],
-        "notes": result.get("notes", {}),
-        "turn_count": 1,
+        "history": [{"role": "system", "content": system_prompt}],
+        "notes": {"ai_points": [], "student_points": [], "coach_observations": []},
+        "turn_count": 0,
     }
 
-    return {
-        "session_id": session_id,
-        "debate_response": result.get("debate_response", ""),
-        "coach_feedback": result.get("coach_feedback", {}),
-        "notes": result.get("notes", {}),
-        "turn": 1,
-    }
+    return {"session_id": session_id}
 
 
 @app.post("/api/message")
@@ -232,7 +211,7 @@ async def end_debate(req: EndDebate):
     # Build a clean transcript for the judge
     lines = []
     for msg in session["history"]:
-        if msg["role"] == "user" and not msg["content"].startswith("The debate topic"):
+        if msg["role"] == "user":
             lines.append(f"STUDENT: {msg['content']}")
         elif msg["role"] == "assistant":
             try:
@@ -263,10 +242,11 @@ async def end_debate(req: EndDebate):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Clean up
+    # Grab final notes before cleanup
+    final_notes = session["notes"]
     del sessions[req.session_id]
 
-    return {"report": report}
+    return {"report": report, "notes": final_notes}
 
 
 # ---------------------------------------------------------------------------
