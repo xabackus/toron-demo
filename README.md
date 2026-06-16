@@ -12,6 +12,11 @@ git clone https://github.com/xabackus/toron-demo.git
 cd toron-demo
 pip install -r requirements.txt
 
+# Or if using pip3
+git clone https://github.com/xabackus/toron-demo.git
+cd toron-demo
+pip install -r requirements.txt
+
 # Run
 uvicorn app:app --reload
 ```
