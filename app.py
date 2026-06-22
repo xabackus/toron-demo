@@ -219,7 +219,7 @@ You are an expert debate coach producing a final report card.
 
 Topic: "{topic}"
 Student argued: {user_side}
-Opponent difficulty: "{opponent_difficulty}"
+Coach strictness: "{coach_difficulty}"
 
 Review the full transcript and respond with valid JSON only:
 {{
@@ -496,7 +496,7 @@ async def end_debate(req: EndDebate):
     report_system = REPORT_CARD_PROMPT.format(
         topic=session["topic"],
         user_side=session["user_side"],
-        opponent_difficulty=session["opponent_difficulty"],
+        coach_difficulty=session["coach_difficulty"],
     )
 
     try:
