@@ -63,17 +63,29 @@ DIFFICULTY_GUIDANCE = {
     ),
 }
 
-DEBATE_SYSTEM_PROMPT = """\
-You are Toron, an AI debate practice system. You play two simultaneous roles:
+OPPONENT_SYSTEM_PROMPT = """\
+You are a debate opponent arguing {ai_side} the motion: "{topic}".
 
-DEBATER — You argue {ai_side} the motion: "{topic}".
   • Make substantive, well-structured arguments.
   • Challenge weak reasoning and probe logical gaps.
   • Respond directly to the student's points before introducing new ones.
   • The student always speaks first. You respond to their opening argument.
 
-COACH — After each exchange, provide brief coaching feedback on the student's
-latest argument.
+{difficulty_guidance}
+
+You MUST respond with valid JSON matching this schema (nothing else):
+{{
+  "debate_response": "<your argument / rebuttal, 2-4 paragraphs>"
+}}"""
+
+COACH_SYSTEM_PROMPT = """\
+You are an expert debate coach silently observing a practice debate.
+
+Topic: "{topic}"
+The student argues: {user_side}
+
+After each exchange you will receive the student's argument and the opponent's
+response. Analyze the student's performance:
   • Be balanced: acknowledge strengths AND identify weaknesses.
   • Be specific: reference exact phrases or logical moves the student made.
   • Suggest concrete improvements.
@@ -82,14 +94,13 @@ latest argument.
 
 You MUST respond with valid JSON matching this schema (nothing else):
 {{
-  "debate_response": "<your argument / rebuttal, 2-4 paragraphs>",
   "coach_feedback": {{
     "praise": "<what the student did well in their latest message>",
     "criticism": "<what could improve, with specific suggestions>"
   }},
   "notes": {{
-    "ai_points":          ["<every key argument YOU have made, cumulative>"],
-    "student_points":     ["<every key argument THE STUDENT has made, cumulative>"],
+    "ai_points":          ["<every key argument the OPPONENT has made, cumulative>"],
+    "student_points":     ["<every key argument the STUDENT has made, cumulative>"],
     "coach_observations": ["<running observations about the student's patterns>"]
   }}
 }}
@@ -150,14 +161,22 @@ def _call_openai(api_key: str, messages: list, temperature: float = 0.7):
 async def start_debate(req: StartDebate):
     session_id = str(uuid.uuid4())
     ai_side = "against" if req.user_side.lower() == "for" else "for"
+    diff_guidance = DIFFICULTY_GUIDANCE.get(
+        req.difficulty, DIFFICULTY_GUIDANCE["intermediate"]
+    )
 
-    system_prompt = DEBATE_SYSTEM_PROMPT.format(
+    opponent_prompt = OPPONENT_SYSTEM_PROMPT.format(
         ai_side=ai_side,
         topic=req.topic,
         difficulty=req.difficulty,
-        difficulty_guidance=DIFFICULTY_GUIDANCE.get(
-            req.difficulty, DIFFICULTY_GUIDANCE["intermediate"]
-        ),
+        difficulty_guidance=diff_guidance,
+    )
+
+    coach_prompt = COACH_SYSTEM_PROMPT.format(
+        user_side=req.user_side,
+        topic=req.topic,
+        difficulty=req.difficulty,
+        difficulty_guidance=diff_guidance,
     )
 
     # No OpenAI call — the student speaks first.
@@ -166,8 +185,8 @@ async def start_debate(req: StartDebate):
         "user_side": req.user_side,
         "ai_side": ai_side,
         "difficulty": req.difficulty,
-        "system_prompt": system_prompt,
-        "history": [{"role": "system", "content": system_prompt}],
+        "opponent_history": [{"role": "system", "content": opponent_prompt}],
+        "coach_history": [{"role": "system", "content": coach_prompt}],
         "notes": {"ai_points": [], "student_points": [], "coach_observations": []},
         "turn_count": 0,
     }
@@ -181,23 +200,40 @@ async def send_message(req: SendMessage):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    session["history"].append({"role": "user", "content": req.message})
+    # ---- 1. Opponent: debate response ----
+    session["opponent_history"].append({"role": "user", "content": req.message})
 
     try:
-        result, raw = _call_openai(req.api_key, session["history"])
+        opp_result, opp_raw = _call_openai(req.api_key, session["opponent_history"])
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"Opponent error: {e}")
 
-    session["history"].append({"role": "assistant", "content": raw})
-    session["notes"] = result.get("notes", session["notes"])
+    debate_response = opp_result.get("debate_response", "")
+    session["opponent_history"].append({"role": "assistant", "content": opp_raw})
+
+    # ---- 2. Coach: feedback + notes ----
+    coach_observation = (
+        f"STUDENT: {req.message}\n\nOPPONENT: {debate_response}"
+    )
+    session["coach_history"].append({"role": "user", "content": coach_observation})
+
+    try:
+        coach_result, coach_raw = _call_openai(req.api_key, session["coach_history"])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Coach error: {e}")
+
+    session["coach_history"].append({"role": "assistant", "content": coach_raw})
+    session["notes"] = coach_result.get("notes", session["notes"])
     session["turn_count"] += 1
 
     return {
-        "debate_response": result.get("debate_response", ""),
-        "coach_feedback": result.get("coach_feedback", {}),
-        "notes": result.get("notes", {}),
+        "debate_response": debate_response,
+        "coach_feedback": coach_result.get("coach_feedback", {}),
+        "notes": coach_result.get("notes", {}),
         "turn": session["turn_count"],
     }
 
@@ -208,9 +244,9 @@ async def end_debate(req: EndDebate):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Build a clean transcript for the judge
+    # Build a clean transcript from the opponent history
     lines = []
-    for msg in session["history"]:
+    for msg in session["opponent_history"]:
         if msg["role"] == "user":
             lines.append(f"STUDENT: {msg['content']}")
         elif msg["role"] == "assistant":
