@@ -1,87 +1,121 @@
 /* ================================================================
    Toron Demo — Styles
+   ================================================================
+   Single stylesheet for all three screens (setup, debate, report).
+   Uses CSS custom properties (variables) for consistent theming.
+
+   Key CSS concepts used here:
+     - var(--name)       → references a CSS variable defined in :root
+     - display: flex     → flexbox layout (like a 1D grid)
+     - flex: 1           → grow to fill available space
+     - position: fixed   → positioned relative to the viewport (not scrollable)
+     - transition        → animate property changes over time
+     - classList toggle  → JS adds/removes classes to trigger style changes
    ================================================================ */
 
+
+/* ----------------------------------------------------------------
+   Design tokens (CSS variables)
+   ----------------------------------------------------------------
+   Defined on :root (the <html> element), so they're available everywhere.
+   Usage: color: var(--primary);
+   Change a value here and it updates everywhere it's used.
+   ---------------------------------------------------------------- */
 :root {
-  --primary: #1e3a5f;
-  --primary-light: #2563eb;
-  --primary-bg: #eff6ff;
-  --bg: #f1f5f9;
-  --card: #ffffff;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --border: #e2e8f0;
-  --border-light: #f1f5f9;
-  --success: #059669;
+  --primary: #1e3a5f;            /* dark blue — headings, primary buttons */
+  --primary-light: #2563eb;      /* brighter blue — accents, links, score highlights */
+  --primary-bg: #eff6ff;         /* very light blue — badge backgrounds */
+  --bg: #f1f5f9;                 /* light gray — page background */
+  --card: #ffffff;               /* white — card/panel backgrounds */
+  --text: #0f172a;               /* near-black — body text */
+  --text-muted: #64748b;         /* gray — secondary text, hints, labels */
+  --border: #e2e8f0;             /* light gray — borders between elements */
+  --border-light: #f1f5f9;       /* very light — subtle dividers inside panels */
+  --success: #059669;            /* green — praise text, high scores (8+) */
   --success-bg: #ecfdf5;
-  --warning: #d97706;
+  --warning: #d97706;            /* amber — criticism text, mid scores (4-5) */
   --warning-bg: #fffbeb;
-  --danger: #dc2626;
+  --danger: #dc2626;             /* red — errors, end debate button, low scores */
   --danger-bg: #fef2f2;
-  --radius: 10px;
-  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
-  --shadow-lg: 0 10px 25px rgba(0,0,0,.08);
+  --radius: 10px;                /* default border radius for cards */
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);     /* subtle shadow */
+  --shadow-lg: 0 10px 25px rgba(0,0,0,.08);  /* larger shadow for cards/modals */
 }
 
+/* Reset all elements to remove browser default margins/padding */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
-  line-height: 1.6;
-  height: 100vh;
-  overflow: hidden;
+  line-height: 1.6;        /* space between lines of text (1.6 = 160% of font size) */
+  height: 100vh;            /* 100% of viewport height */
+  overflow: hidden;         /* no page-level scrollbar — each panel scrolls independently */
 }
 
 
 /* ----------------------------------------------------------------
-   Screens — only one visible at a time
+   Screen system
+   ----------------------------------------------------------------
+   .screen elements are hidden by default (display: none).
+   Adding .active shows them (display: flex).
+   JS toggles .active to switch between setup/debate screens.
    ---------------------------------------------------------------- */
 
-.screen { display: none; height: 100vh; }
-.screen.active { display: flex; }
+.screen {
+  display: none;    /* hidden by default */
+  height: 100vh;    /* fill the full viewport */
+}
+.screen.active {
+  display: flex;    /* visible — flex enables layout control of children */
+}
 
 
 /* ----------------------------------------------------------------
-   Setup Screen
+   Setup screen
+   ----------------------------------------------------------------
+   A single centered card with the config form.
    ---------------------------------------------------------------- */
 
 #setup-screen {
-  align-items: center;
-  justify-content: center;
+  /* Center the card both horizontally and vertically */
+  align-items: center;      /* vertical centering (cross axis) */
+  justify-content: center;  /* horizontal centering (main axis) */
 }
 
 .setup-card {
   background: var(--card);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg);   /* elevated card effect */
   padding: 40px;
   width: 100%;
-  max-width: 460px;
+  max-width: 460px;   /* don't get wider than this on large screens */
 }
 
 .logo {
   font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -.5px;
+  font-weight: 700;             /* bold */
+  letter-spacing: -.5px;        /* slightly tighter letter spacing */
   color: var(--primary);
 }
 
 .tagline {
   color: var(--text-muted);
   font-size: 14px;
-  margin-bottom: 28px;
+  margin-bottom: 28px;          /* space before the form fields */
 }
 
+/* Form elements — shared styles for inputs, selects */
+
 .form-group {
-  margin-bottom: 18px;
+  margin-bottom: 18px;           /* vertical space between form fields */
 }
 
 .form-group label {
-  display: block;
+  display: block;                /* label on its own line above the input */
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 600;             /* semi-bold */
   color: var(--text);
   margin-bottom: 5px;
 }
@@ -89,21 +123,22 @@ body {
 .form-group input[type="text"],
 .form-group input[type="password"],
 .form-group select {
-  width: 100%;
-  padding: 10px 12px;
+  width: 100%;                   /* fill the card width */
+  padding: 10px 12px;           /* inner spacing (vertical horizontal) */
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 14px;
   color: var(--text);
   background: var(--card);
-  transition: border-color .15s;
+  transition: border-color .15s;  /* smooth color change on focus */
 }
 
+/* Focus state — blue border + glow ring when the input is selected */
 .form-group input:focus,
 .form-group select:focus {
-  outline: none;
-  border-color: var(--primary-light);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .1);
+  outline: none;                           /* remove default browser outline */
+  border-color: var(--primary-light);      /* blue border */
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .1);  /* subtle blue glow */
 }
 
 .hint {
@@ -113,20 +148,22 @@ body {
   margin-top: 4px;
 }
 
+/* Radio button group — horizontal layout */
 .radio-group {
   display: flex;
-  gap: 20px;
+  gap: 20px;     /* space between the two radio options */
 }
 
 .radio-label {
   font-size: 14px;
-  font-weight: 400 !important;
+  font-weight: 400 !important;  /* override the form-group label bold */
   display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
+  align-items: center;          /* vertically center the radio + text */
+  gap: 6px;                     /* space between radio circle and text */
+  cursor: pointer;              /* hand cursor on hover */
 }
 
+/* Primary button (blue, full-width) */
 .btn-primary {
   width: 100%;
   padding: 11px;
@@ -137,43 +174,51 @@ body {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background .15s;
+  transition: background .15s;   /* smooth darken on hover */
   margin-top: 6px;
 }
 
-.btn-primary:hover { background: #15304d; }
-.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary:hover { background: #15304d; }   /* slightly darker on hover */
+.btn-primary:disabled {
+  opacity: .5;           /* grayed out when disabled (during loading) */
+  cursor: not-allowed;   /* "no" cursor icon */
+}
 
+/* Error text below the start button */
 .error {
   color: var(--danger);
   font-size: 13px;
   margin-top: 10px;
-  min-height: 18px;
+  min-height: 18px;    /* reserve space so the card doesn't jump when error appears */
 }
 
 
 /* ----------------------------------------------------------------
-   Debate Screen — Header
+   Debate screen — header (top bar)
+   ----------------------------------------------------------------
+   Fixed-height bar with branding, topic, controls.
+   flex-shrink: 0 prevents it from shrinking when the chat panel
+   needs more space.
    ---------------------------------------------------------------- */
 
 #debate-screen {
-  flex-direction: column;
+  flex-direction: column;   /* stack header above body vertically */
 }
 
 .debate-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: center;           /* vertically center header content */
+  justify-content: space-between; /* push left group and right group apart */
   padding: 10px 20px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  flex-shrink: 0;                /* don't compress the header */
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 14px;                     /* space between logo and topic */
 }
 
 .logo-sm {
@@ -183,30 +228,33 @@ body {
   letter-spacing: -.3px;
 }
 
+/* Topic text in the header — truncated with ... if too long */
 .header-topic {
   font-size: 13px;
   color: var(--text-muted);
   max-width: 400px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: hidden;              /* hide overflowing text */
+  text-overflow: ellipsis;       /* show ... at the end */
+  white-space: nowrap;           /* prevent line wrapping */
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 10px;                     /* space between buttons */
 }
 
+/* Turn counter badge — "Turn 3" */
 .turn-badge {
   font-size: 12px;
   font-weight: 600;
   color: var(--primary-light);
-  background: var(--primary-bg);
+  background: var(--primary-bg);  /* light blue background */
   padding: 4px 10px;
-  border-radius: 20px;
+  border-radius: 20px;           /* pill shape */
 }
 
+/* Ghost button — transparent with border (Coach, Notes, Download) */
 .btn-ghost {
   background: none;
   border: 1px solid var(--border);
@@ -218,8 +266,9 @@ body {
   transition: background .1s;
 }
 
-.btn-ghost:hover { background: var(--border-light); }
+.btn-ghost:hover { background: var(--border-light); }  /* subtle highlight on hover */
 
+/* End Debate button — red outline, fills red on hover */
 .btn-danger-sm {
   background: none;
   border: 1px solid var(--danger);
@@ -233,102 +282,117 @@ body {
 }
 
 .btn-danger-sm:hover {
-  background: var(--danger);
-  color: #fff;
+  background: var(--danger);  /* fill with red */
+  color: #fff;                 /* white text on red background */
 }
 
 
 /* ----------------------------------------------------------------
-   Debate Screen — Body
+   Debate screen — body (chat + notes columns)
+   ----------------------------------------------------------------
+   Horizontal flex layout. Chat panel takes remaining space (flex: 1).
+   Notes panel is fixed 320px width, collapsing to 0 when hidden.
    ---------------------------------------------------------------- */
 
 .debate-body {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
+  display: flex;       /* horizontal layout: chat | notes */
+  flex: 1;             /* fill all vertical space below the header */
+  overflow: hidden;    /* prevent body from scrolling; panels scroll individually */
 }
 
-
-/* Chat panel */
-
+/* Chat panel — left column, fills available width */
 .chat-panel {
-  flex: 1;
+  flex: 1;                     /* grow to fill space not taken by notes panel */
   display: flex;
-  flex-direction: column;
-  min-width: 0;
+  flex-direction: column;      /* stack messages above input bar */
+  min-width: 0;                /* allow flex item to shrink below content size */
 }
 
+/* Scrollable message area */
 .chat-messages {
-  flex: 1;
-  overflow-y: auto;
+  flex: 1;                     /* fill space above the input bar */
+  overflow-y: auto;            /* vertical scroll when messages overflow */
   padding: 20px;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  flex-direction: column;      /* stack messages top-to-bottom */
+  gap: 16px;                   /* space between messages */
 }
 
-/* Message bubbles */
-
+/* Message container — holds label + bubble + optional coach feedback */
 .msg {
-  max-width: 80%;
+  max-width: 80%;              /* messages don't span the full width */
   line-height: 1.55;
 }
 
-.msg.ai {
-  align-self: flex-start;
-}
+/* Opponent messages align left, student messages align right */
+.msg.ai { align-self: flex-start; }   /* left side */
+.msg.user { align-self: flex-end; }   /* right side */
 
-.msg.user {
-  align-self: flex-end;
-}
-
+/* "OPPONENT" / "YOU" label above each bubble */
 .msg-label {
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .5px;
+  text-transform: uppercase;   /* force uppercase */
+  letter-spacing: .5px;        /* slightly spread out */
   margin-bottom: 4px;
 }
 
-.msg.ai .msg-label { color: var(--primary-light); }
-.msg.user .msg-label { color: var(--text-muted); text-align: right; }
+.msg.ai .msg-label { color: var(--primary-light); }                 /* blue */
+.msg.user .msg-label { color: var(--text-muted); text-align: right; }  /* gray, right-aligned */
 
+/* Message bubble */
 .msg-bubble {
   padding: 12px 16px;
   border-radius: var(--radius);
   font-size: 14px;
-  white-space: pre-wrap;
+  white-space: pre-wrap;       /* preserve line breaks from model output */
 }
 
+/* Opponent bubble: white with border */
 .msg.ai .msg-bubble {
   background: var(--card);
   border: 1px solid var(--border);
 }
 
+/* Student bubble: blue with white text */
 .msg.user .msg-bubble {
   background: var(--primary);
   color: #fff;
 }
 
-/* Coach feedback inline */
 
-/* Coach feedback inline — hidden by default via .coaching-hidden */
+/* ----------------------------------------------------------------
+   Coach feedback (inline, below opponent's message)
+   ----------------------------------------------------------------
+   VISIBILITY MECHANISM:
+     - .coaching-hidden is a class on the #chat-messages container
+     - When present (default), all .coach-feedback children are hidden
+     - The Coach toggle button in JS adds/removes .coaching-hidden
+     - This shows/hides ALL feedback blocks at once with one class change
 
+   The feedback HTML is always in the DOM — it's just display:none.
+   This means the user can debate first, then toggle coaching on to
+   see all the feedback retroactively.
+   ---------------------------------------------------------------- */
+
+/* When .coaching-hidden is on the parent, hide all feedback blocks */
 .chat-messages.coaching-hidden .coach-feedback {
   display: none;
 }
 
+/* Feedback container — appears below the opponent's bubble */
 .coach-feedback {
   margin-top: 10px;
   padding: 10px 14px;
   border-radius: 8px;
   font-size: 13px;
   background: var(--border-light);
-  border-left: 3px solid var(--primary-light);
+  border-left: 3px solid var(--primary-light);  /* blue accent bar on the left edge */
 }
 
+/* "COACH FEEDBACK" heading */
 .coach-feedback strong {
-  display: block;
+  display: block;              /* own line */
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: .5px;
@@ -336,38 +400,40 @@ body {
   margin-bottom: 4px;
 }
 
+/* Praise text (green) with checkmark prefix */
 .feedback-praise {
   color: var(--success);
   margin-bottom: 6px;
 }
 
+/* Criticism text (amber) with triangle prefix */
 .feedback-criticism {
   color: var(--warning);
 }
 
+/* ::before pseudo-elements add text before the element's content */
 .feedback-praise::before { content: "✓ "; }
 .feedback-criticism::before { content: "△ "; }
 
 
-/* Input bar */
-
+/* Input bar — pinned to bottom of chat panel */
 .chat-input-bar {
   padding: 12px 20px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border);  /* line separating from messages */
   background: var(--card);
-  display: flex;
+  display: flex;                         /* horizontal: textarea + button */
   gap: 10px;
-  align-items: flex-end;
+  align-items: flex-end;                 /* align button to bottom of textarea */
 }
 
 .chat-input-bar textarea {
-  flex: 1;
+  flex: 1;               /* fill available width (minus button) */
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
-  font-family: inherit;
-  resize: none;
+  font-family: inherit;  /* use the body font, not monospace */
+  resize: none;           /* prevent manual resizing by dragging */
   color: var(--text);
   line-height: 1.5;
 }
@@ -377,33 +443,45 @@ body {
   border-color: var(--primary-light);
 }
 
+/* Override btn-primary defaults for the send button */
 .btn-send {
-  width: auto;
+  width: auto;       /* don't stretch to full width */
   padding: 10px 20px;
-  margin-top: 0;
-  flex-shrink: 0;
+  margin-top: 0;     /* remove the margin-top from .btn-primary */
+  flex-shrink: 0;    /* don't compress the button when textarea grows */
 }
 
 
 /* ----------------------------------------------------------------
-   Notes Panel
+   Notes panel (right sidebar)
+   ----------------------------------------------------------------
+   Fixed-width panel showing the model's internal tracking.
+   Collapsible: JS toggles .collapsed on/off.
+
+   COLLAPSE MECHANISM:
+     - Default state has .collapsed (added in HTML)
+     - .collapsed sets width/padding/opacity to 0
+     - transition property animates all three over 0.2 seconds
+     - Notes toggle button removes .collapsed to slide it open
    ---------------------------------------------------------------- */
 
 .notes-panel {
-  width: 320px;
+  width: 320px;                /* fixed width */
   background: var(--card);
-  border-left: 1px solid var(--border);
-  overflow-y: auto;
+  border-left: 1px solid var(--border);  /* vertical divider from chat */
+  overflow-y: auto;            /* scroll if notes exceed panel height */
   padding: 20px;
+  /* Animate width, padding, and opacity when .collapsed is toggled */
   transition: width .2s, padding .2s, opacity .2s;
-  flex-shrink: 0;
+  flex-shrink: 0;              /* don't compress — either full width or 0 */
 }
 
+/* Collapsed state — all dimensions go to 0 */
 .notes-panel.collapsed {
   width: 0;
   padding: 0;
-  opacity: 0;
-  overflow: hidden;
+  opacity: 0;          /* fade out */
+  overflow: hidden;    /* hide content that hasn't finished collapsing */
 }
 
 .notes-title {
@@ -419,9 +497,7 @@ body {
   margin-bottom: 18px;
 }
 
-.notes-section {
-  margin-bottom: 18px;
-}
+.notes-section { margin-bottom: 18px; }
 
 .notes-section h4 {
   font-size: 13px;
@@ -429,18 +505,20 @@ body {
   margin-bottom: 6px;
 }
 
+/* Note items — unstyled list (no bullets) */
 .notes-list {
-  list-style: none;
+  list-style: none;  /* remove bullet points */
   padding: 0;
 }
 
 .notes-list li {
   font-size: 13px;
   padding: 5px 0;
-  border-bottom: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);  /* subtle divider */
   color: var(--text);
 }
 
+/* Placeholder text when no notes exist yet */
 .notes-list li.empty {
   color: var(--text-muted);
   font-style: italic;
@@ -448,23 +526,47 @@ body {
 
 
 /* ----------------------------------------------------------------
-   Report Card
+   Overlay system (report card + loading)
+   ----------------------------------------------------------------
+   Full-screen overlays cover the entire viewport.
+   Hidden by default (display: none). Shown via .active (display: flex).
+   backdrop-filter: blur() blurs the content behind the overlay.
+
+   Both the report card and loading spinner use this same mechanism.
    ---------------------------------------------------------------- */
 
 .overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, .5);
-  backdrop-filter: blur(4px);
-  z-index: 100;
-  align-items: center;
-  justify-content: center;
+  display: none;             /* hidden by default */
+  position: fixed;           /* positioned relative to viewport, not page */
+  inset: 0;                  /* shorthand for top:0 right:0 bottom:0 left:0 */
+  background: rgba(15, 23, 42, .5);  /* semi-transparent dark backdrop */
+  backdrop-filter: blur(4px);         /* blur the debate screen behind it */
+  z-index: 100;              /* stack above everything else */
+  align-items: center;       /* center content vertically */
+  justify-content: center;   /* center content horizontally */
 }
 
 .overlay.active {
-  display: flex;
+  display: flex;             /* show and enable flexbox centering */
 }
+
+
+/* ----------------------------------------------------------------
+   Report card modal
+   ----------------------------------------------------------------
+   Scrollable card centered in the overlay. Contains:
+     - Letter grade (large, centered)
+     - Summary text
+     - Five score rows (bar + rationale each)
+     - Strongest moment / biggest weakness
+     - Takeaways list
+     - Action buttons (download + new debate)
+
+   Score bars use inline styles set by JS:
+     style="width:70%;background:#2563eb;"
+   The width represents the score (score/10 * 100%), and the color
+   is determined by scoreColor() in JS.
+   ---------------------------------------------------------------- */
 
 .report-card {
   background: var(--card);
@@ -473,8 +575,8 @@ body {
   padding: 36px;
   width: 100%;
   max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
+  max-height: 90vh;          /* don't exceed 90% of viewport height */
+  overflow-y: auto;          /* scroll if content is taller than max-height */
 }
 
 .report-card h2 {
@@ -484,9 +586,10 @@ body {
   margin-bottom: 12px;
 }
 
+/* Large grade display — e.g., "B+" */
 .grade {
   font-size: 56px;
-  font-weight: 800;
+  font-weight: 800;        /* extra bold */
   text-align: center;
   margin: 8px 0;
   color: var(--primary);
@@ -499,84 +602,64 @@ body {
   margin-bottom: 24px;
 }
 
+/* Container for all five score rows */
 .scores-grid {
   display: flex;
-  flex-direction: column;
+  flex-direction: column;   /* stack score rows vertically */
   gap: 12px;
   margin-bottom: 24px;
 }
 
+/* Individual score row: label+number, bar, rationale */
 .score-row {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
+/* Top line: label on left, "7/10" on right */
 .score-row-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.score-label {
-  font-size: 13px;
-  font-weight: 600;
-}
+.score-label { font-size: 13px; font-weight: 600; }
+.score-value { font-size: 13px; font-weight: 700; color: var(--primary-light); }
 
-.score-value {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--primary-light);
-}
-
+/* Score bar background (gray track) */
 .score-bar-bg {
   height: 6px;
   background: var(--border-light);
   border-radius: 3px;
-  overflow: hidden;
+  overflow: hidden;   /* clip the fill bar's rounded corners cleanly */
 }
 
+/* Score bar fill (colored portion — width and color set by JS inline styles) */
 .score-bar-fill {
   height: 100%;
   border-radius: 3px;
-  transition: width .4s ease;
+  transition: width .4s ease;  /* animate the bar when rendered */
 }
 
+/* Rationale text below each score bar */
 .score-rationale {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.4;
 }
 
-.report-section {
-  margin-bottom: 18px;
-}
-
-.report-section h4 {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
+/* Sections: strongest moment, biggest weakness, takeaways */
+.report-section { margin-bottom: 18px; }
+.report-section h4 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
 .report-section p,
-.report-section li {
-  font-size: 14px;
-  color: var(--text);
-  line-height: 1.5;
-}
+.report-section li { font-size: 14px; color: var(--text); line-height: 1.5; }
+.report-section ul { padding-left: 18px; }  /* indent bullet list */
+.report-section li { margin-bottom: 4px; }
 
-.report-section ul {
-  padding-left: 18px;
-}
+.report-card .btn-primary { margin-top: 20px; }
 
-.report-section li {
-  margin-bottom: 4px;
-}
-
-.report-card .btn-primary {
-  margin-top: 20px;
-}
-
+/* Action buttons row at bottom of report card */
 .report-actions {
   display: flex;
   gap: 10px;
@@ -584,34 +667,41 @@ body {
 }
 
 .report-actions .btn-primary {
-  flex: 1;
-  margin-top: 0;
+  flex: 1;           /* New Debate button fills remaining space */
+  margin-top: 0;     /* override the general margin-top */
 }
 
 .report-actions .btn-ghost {
-  flex-shrink: 0;
+  flex-shrink: 0;    /* Download button doesn't compress */
 }
 
 
 /* ----------------------------------------------------------------
    Loading overlay
+   ----------------------------------------------------------------
+   Same overlay mechanism as the report card.
+   Shows a spinning circle and a text message.
    ---------------------------------------------------------------- */
 
 .loading-overlay {
-  flex-direction: column;
+  flex-direction: column;      /* stack spinner above text vertically */
   gap: 16px;
-  background: rgba(15, 23, 42, .35);
+  background: rgba(15, 23, 42, .35);  /* slightly lighter than report overlay */
 }
 
+/* Spinning circle — uses a border trick:
+   three sides are semi-transparent, one side is white.
+   The animation rotates it continuously. */
 .spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid rgba(255,255,255,.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin .7s linear infinite;
+  border: 3px solid rgba(255,255,255,.3);  /* gray circle */
+  border-top-color: #fff;                   /* white top edge = the "spinner" */
+  border-radius: 50%;                       /* make it circular */
+  animation: spin .7s linear infinite;      /* rotate continuously */
 }
 
+/* Keyframe animation: rotate from 0 to 360 degrees */
 @keyframes spin { to { transform: rotate(360deg); } }
 
 #loading-text {
@@ -622,13 +712,16 @@ body {
 
 
 /* ----------------------------------------------------------------
-   Responsive
+   Responsive — mobile adjustments
+   ----------------------------------------------------------------
+   @media (max-width: 768px) applies these styles only when the
+   viewport is 768px wide or less (tablets and phones).
    ---------------------------------------------------------------- */
 
 @media (max-width: 768px) {
-  .setup-card { padding: 24px; margin: 16px; }
-  .notes-panel { width: 260px; }
+  .setup-card { padding: 24px; margin: 16px; }   /* smaller padding on mobile */
+  .notes-panel { width: 260px; }                   /* narrower notes panel */
   .notes-panel.collapsed { width: 0; }
-  .msg { max-width: 92%; }
-  .header-topic { max-width: 160px; }
+  .msg { max-width: 92%; }                         /* messages can be wider */
+  .header-topic { max-width: 160px; }              /* truncate topic sooner */
 }
