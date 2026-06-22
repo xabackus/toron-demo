@@ -45,21 +45,48 @@ class EndDebate(BaseModel):
 # Prompts
 # ---------------------------------------------------------------------------
 
-DIFFICULTY_GUIDANCE = {
+OPPONENT_DIFFICULTY = {
     "beginner": (
-        "Beginner mode: Use clear, accessible arguments. Be encouraging and "
-        "patient. Give detailed coaching with concrete examples of improvement. "
-        "Avoid overly complex evidence or advanced rhetorical techniques."
+        "BEGINNER OPPONENT: Use simple, straightforward arguments with 1-2 main "
+        "points per turn. Don't aggressively exploit logical gaps — give the "
+        "student room to develop their reasoning. Avoid complex evidence chains "
+        "or advanced rhetorical techniques. If the student makes a decent point, "
+        "acknowledge it before countering."
     ),
     "intermediate": (
-        "Intermediate mode: Use moderately complex arguments with evidence and "
-        "rhetorical technique. Balanced feedback — push the student but "
-        "acknowledge good moves."
+        "INTERMEDIATE OPPONENT: Use solid arguments backed by evidence and clear "
+        "reasoning. Challenge weak points directly. Introduce counter-evidence "
+        "when relevant. Press the student on unsupported claims, but don't "
+        "overwhelm them with more than 2-3 distinct attacks per turn."
     ),
     "advanced": (
-        "Advanced mode: Use sophisticated arguments, detailed evidence, and "
-        "advanced rhetorical techniques. Hold the student to high standards. "
-        "Be concise in coaching — they should identify issues themselves."
+        "ADVANCED OPPONENT: Argue at the highest level. Use multi-layered "
+        "arguments with detailed evidence and sophisticated rhetorical techniques. "
+        "Aggressively exploit every logical gap, weak analogy, and unsupported "
+        "claim. Steel-man your own position. Anticipate and preempt the student's "
+        "likely responses. Make them earn every point."
+    ),
+}
+
+COACH_DIFFICULTY = {
+    "beginner": (
+        "BEGINNER COACHING: Focus on the 1-2 most important issues per turn. Be "
+        "encouraging — celebrate what works before noting what doesn't. Keep "
+        "suggestions simple and actionable."
+    ),
+    "intermediate": (
+        "INTERMEDIATE COACHING: Identify 2-3 issues per turn covering both major "
+        "and moderate problems. Balance praise with substantive criticism. Suggest "
+        "specific techniques for improvement."
+    ),
+    "advanced": (
+        "ADVANCED COACHING: Be ruthlessly thorough. Flag every logical gap, weak "
+        "word choice, missing evidence, structural flaw, and rhetorical missed "
+        "opportunity you can find. Hold praise to a very high bar — only genuinely "
+        "strong moves deserve it. Point out subtle issues a less experienced coach "
+        "would miss: implicit assumptions, burden-of-proof shifts, scope creep, "
+        "false equivalences, missing qualifications. The student should feel like "
+        "they are being coached by someone who notices everything."
     ),
 }
 
@@ -71,7 +98,7 @@ You are a debate opponent arguing {ai_side} the motion: "{topic}".
   • Respond directly to the student's points before introducing new ones.
   • The student always speaks first. You respond to their opening argument.
 
-{difficulty_guidance}
+{opponent_difficulty}
 
 You MUST respond with valid JSON matching this schema (nothing else):
 {{
@@ -90,7 +117,7 @@ response. Analyze the student's performance:
   • Be specific: reference exact phrases or logical moves the student made.
   • Suggest concrete improvements.
 
-{difficulty_guidance}
+{coach_difficulty}
 
 You MUST respond with valid JSON matching this schema (nothing else):
 {{
@@ -161,22 +188,17 @@ def _call_openai(api_key: str, messages: list, temperature: float = 0.7):
 async def start_debate(req: StartDebate):
     session_id = str(uuid.uuid4())
     ai_side = "against" if req.user_side.lower() == "for" else "for"
-    diff_guidance = DIFFICULTY_GUIDANCE.get(
-        req.difficulty, DIFFICULTY_GUIDANCE["intermediate"]
-    )
-
+    diff = req.difficulty
     opponent_prompt = OPPONENT_SYSTEM_PROMPT.format(
         ai_side=ai_side,
         topic=req.topic,
-        difficulty=req.difficulty,
-        difficulty_guidance=diff_guidance,
+        opponent_difficulty=OPPONENT_DIFFICULTY.get(diff, OPPONENT_DIFFICULTY["intermediate"]),
     )
 
     coach_prompt = COACH_SYSTEM_PROMPT.format(
         user_side=req.user_side,
         topic=req.topic,
-        difficulty=req.difficulty,
-        difficulty_guidance=diff_guidance,
+        coach_difficulty=COACH_DIFFICULTY.get(diff, COACH_DIFFICULTY["intermediate"]),
     )
 
     # No OpenAI call — the student speaks first.
