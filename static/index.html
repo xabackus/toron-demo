@@ -68,6 +68,9 @@
       </div>
       <div class="header-right">
         <span id="turn-counter" class="turn-badge">Turn 1</span>
+        <button id="toggle-coach-btn" class="btn-ghost" onclick="toggleCoach()">
+          Coach
+        </button>
         <button id="toggle-notes-btn" class="btn-ghost" onclick="toggleNotes()">
           Notes ▸
         </button>
@@ -80,7 +83,7 @@
 
       <!-- Chat panel -->
       <div class="chat-panel">
-        <div id="chat-messages" class="chat-messages"></div>
+        <div id="chat-messages" class="chat-messages coaching-hidden"></div>
         <div class="chat-input-bar">
           <textarea
             id="user-input"
