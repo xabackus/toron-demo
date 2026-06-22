@@ -46,7 +46,10 @@ async function startDebate() {
   // querySelector finds the first element matching a CSS selector.
   // 'input[name="side"]:checked' finds the selected radio button in the "side" group.
   const sideInput = document.querySelector('input[name="side"]:checked');
-  const diffInput = document.getElementById("difficulty");
+  const opponentDifficultyInput =
+    document.getElementById("opponent-difficulty");
+  const coachDifficultyInput =
+    document.getElementById("coach-difficulty");
   const errorEl = document.getElementById("setup-error");
 
   // Clear any previous error message
