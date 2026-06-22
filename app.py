@@ -56,7 +56,8 @@ class StartDebate(BaseModel):
     api_key: str
     topic: str
     user_side: str          # "for" or "against"
-    difficulty: str = "intermediate"  # default if not provided
+    opponent_difficulty: str = "intermediate"  # default if not provided
+    coach_difficulty: str = "intermediate"
 
 
 class SendMessage(BaseModel):
@@ -218,7 +219,7 @@ You are an expert debate coach producing a final report card.
 
 Topic: "{topic}"
 Student argued: {user_side}
-Difficulty: {difficulty}
+Opponent difficulty: "{opponent_difficulty}"
 
 Review the full transcript and respond with valid JSON only:
 {{
@@ -307,20 +308,21 @@ async def start_debate(req: StartDebate):
 
     # Flip the side: if student argues "for", AI argues "against"
     ai_side = "against" if req.user_side.lower() == "for" else "for"
-    diff = req.difficulty
+    opponent_diff = req.opponent_difficulty
+    coach_diff = req.coach_difficulty
 
     # Build system prompts by injecting topic, side, and difficulty text.
     # .get(diff, ...) falls back to intermediate if an unknown difficulty is passed.
     opponent_prompt = OPPONENT_SYSTEM_PROMPT.format(
         ai_side=ai_side,
         topic=req.topic,
-        opponent_difficulty=OPPONENT_DIFFICULTY.get(diff, OPPONENT_DIFFICULTY["intermediate"]),
+        opponent_difficulty=OPPONENT_DIFFICULTY[opponent_diff],
     )
-
+    
     coach_prompt = COACH_SYSTEM_PROMPT.format(
         user_side=req.user_side,
         topic=req.topic,
-        coach_difficulty=COACH_DIFFICULTY.get(diff, COACH_DIFFICULTY["intermediate"]),
+        coach_difficulty=COACH_DIFFICULTY[coach_diff],
     )
 
     # Store everything needed to process future turns.
@@ -330,7 +332,8 @@ async def start_debate(req: StartDebate):
         "topic": req.topic,
         "user_side": req.user_side,
         "ai_side": ai_side,
-        "difficulty": req.difficulty,
+        "opponent_difficulty": opponent_diff,
+        "coach_difficulty": coach_diff,
         # Opponent's chat history starts with just its system prompt.
         # Future turns append user/assistant message pairs.
         "opponent_history": [{"role": "system", "content": opponent_prompt}],
@@ -493,7 +496,7 @@ async def end_debate(req: EndDebate):
     report_system = REPORT_CARD_PROMPT.format(
         topic=session["topic"],
         user_side=session["user_side"],
-        difficulty=session["difficulty"],
+        opponent_difficulty=session["opponent_difficulty"],
     )
 
     try:
