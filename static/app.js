@@ -5,6 +5,7 @@
 let sessionId = null;
 let apiKey = null;
 let notesOpen = false;
+let coachVisible = false;
 let latestNotes = null;
 let debateTopic = "";
 
@@ -192,6 +193,14 @@ function appendSystemMessage(text) {
    Notes panel
    ---------------------------------------------------------------- */
 
+function toggleCoach() {
+  coachVisible = !coachVisible;
+  const container = document.getElementById("chat-messages");
+  container.classList.toggle("coaching-hidden", !coachVisible);
+  document.getElementById("toggle-coach-btn").textContent =
+    coachVisible ? "Coach ✓" : "Coach";
+}
+
 function toggleNotes() {
   const panel = document.getElementById("notes-panel");
   const btn = document.getElementById("toggle-notes-btn");
@@ -324,10 +333,13 @@ function resetApp() {
   sessionId = null;
   latestNotes = null;
   debateTopic = "";
+  coachVisible = false;
   document.getElementById("report-overlay").classList.remove("active");
   document.getElementById("debate-screen").classList.remove("active");
   document.getElementById("setup-screen").classList.add("active");
   document.getElementById("chat-messages").innerHTML = "";
+  document.getElementById("chat-messages").classList.add("coaching-hidden");
+  document.getElementById("toggle-coach-btn").textContent = "Coach";
   document.getElementById("user-input").value = "";
   document.getElementById("notes-ai-points").innerHTML = '<li class="empty">None yet.</li>';
   document.getElementById("notes-student-points").innerHTML = '<li class="empty">None yet.</li>';
