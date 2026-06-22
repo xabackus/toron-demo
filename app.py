@@ -102,7 +102,7 @@ You are a debate opponent arguing {ai_side} the motion: "{topic}".
 
 You MUST respond with valid JSON matching this schema (nothing else):
 {{
-  "debate_response": "<your argument / rebuttal, 2-4 paragraphs>"
+  "debate_response": "<your argument / rebuttal, 1-4 paragraphs>"
 }}"""
 
 COACH_SYSTEM_PROMPT = """\
