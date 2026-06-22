@@ -2,31 +2,64 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- viewport meta makes the page responsive on mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Toron — AI-Coached Debate Practice</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
 
+  <!--
+    THREE SCREENS, one visible at a time:
+      1. setup-screen   — config form (visible on load via class="active")
+      2. debate-screen   — chat + notes panel
+      3. report-overlay  — modal with scores (overlays debate screen)
+
+    Screen switching is done in app.js by adding/removing the .active class.
+    CSS rule: .screen { display: none } / .screen.active { display: flex }
+
+    Plus a loading-overlay shown during OpenAI API calls.
+
+    Element IDs are referenced in app.js via document.getElementById().
+    CSS classes are toggled via el.classList.add/remove/toggle().
+    onclick= attributes call functions defined in app.js.
+  -->
+
+
   <!-- ============================================================= -->
-  <!-- SETUP SCREEN                                                    -->
+  <!-- SCREEN 1: SETUP — Visible on page load                        -->
   <!-- ============================================================= -->
+  <!-- class="active" makes this the initially visible screen -->
   <div id="setup-screen" class="screen active">
+    <!-- Centered card containing the config form -->
     <div class="setup-card">
       <h1 class="logo">Toron</h1>
       <p class="tagline">AI-coached debate practice</p>
 
+      <!--
+        API key input. type="password" masks the characters.
+        autocomplete="off" prevents browsers from caching it.
+        JS reads the value via: document.getElementById("api-key").value
+      -->
       <div class="form-group">
         <label for="api-key">OpenAI API Key</label>
         <input id="api-key" type="password" placeholder="sk-..." autocomplete="off" />
         <span class="hint">Not stored anywhere — sent per request only.</span>
       </div>
 
+      <!-- Debate topic — free text input -->
       <div class="form-group">
         <label for="topic">Debate Topic</label>
         <input id="topic" type="text" placeholder='e.g. "Social media does more harm than good"' />
       </div>
 
+      <!--
+        Side selection. Radio buttons with name="side" form a group
+        (only one can be selected at a time).
+        JS reads the selected value via:
+          document.querySelector('input[name="side"]:checked').value
+        Returns "for" or "against".
+      -->
       <div class="form-group">
         <label>Your Side</label>
         <div class="radio-group">
@@ -39,6 +72,12 @@
         </div>
       </div>
 
+      <!--
+        Difficulty select. Controls BOTH opponent aggressiveness AND
+        coach pickiness (separate configs in app.py).
+        JS reads via: document.getElementById("difficulty").value
+        Returns "beginner", "intermediate", or "advanced".
+      -->
       <div class="form-group">
         <label for="difficulty">Difficulty</label>
         <select id="difficulty">
@@ -48,62 +87,131 @@
         </select>
       </div>
 
+      <!-- onclick= calls startDebate() in app.js -->
       <button id="start-btn" class="btn-primary" onclick="startDebate()">
         Start Debate
       </button>
+      <!-- Error message area. JS sets: errorEl.textContent = "..." -->
       <p id="setup-error" class="error"></p>
     </div>
   </div>
 
+
   <!-- ============================================================= -->
-  <!-- DEBATE SCREEN                                                   -->
+  <!-- SCREEN 2: DEBATE — Chat + notes, shown after setup             -->
   <!-- ============================================================= -->
+  <!-- No .active class — hidden until JS adds it in startDebate() -->
   <div id="debate-screen" class="screen">
 
-    <!-- Top bar -->
+    <!--
+      TOP BAR: branding, turn counter, toggle buttons, end debate.
+      Header is flex-shrink: 0 so it stays fixed-height when chat grows.
+    -->
     <header class="debate-header">
       <div class="header-left">
         <span class="logo-sm">Toron</span>
+        <!-- JS sets this text: document.getElementById("header-topic").textContent = topic -->
         <span id="header-topic" class="header-topic"></span>
       </div>
       <div class="header-right">
+        <!-- Turn counter — updated by updateTurn() in JS -->
         <span id="turn-counter" class="turn-badge">Turn 1</span>
+
+        <!--
+          COACH TOGGLE: shows/hides ALL inline coach feedback globally.
+          Mechanism: toggleCoach() in JS adds/removes .coaching-hidden
+          on #chat-messages. CSS rule:
+            .chat-messages.coaching-hidden .coach-feedback { display: none }
+          Button text changes to "Coach ✓" when visible.
+        -->
         <button id="toggle-coach-btn" class="btn-ghost" onclick="toggleCoach()">
           Coach
         </button>
+
+        <!--
+          NOTES TOGGLE: slides the side panel in/out.
+          Mechanism: toggleNotes() adds/removes .collapsed on #notes-panel.
+          CSS animates width from 320px to 0 via transition.
+          Arrow flips: ▸ (open it) → ◂ (close it).
+        -->
         <button id="toggle-notes-btn" class="btn-ghost" onclick="toggleNotes()">
           Notes ▸
         </button>
+
+        <!-- Downloads the current cumulative notes as a .md file -->
         <button class="btn-ghost" onclick="downloadNotes()">⬇ Notes</button>
+
+        <!-- Triggers endDebate(): confirm dialog → POST /api/end → report card -->
         <button class="btn-danger-sm" onclick="endDebate()">End Debate</button>
       </div>
     </header>
 
+    <!--
+      BODY: two-column flex layout.
+        Left:  chat panel (flex: 1 = fills remaining space)
+        Right: notes panel (fixed 320px, collapses to 0 when hidden)
+    -->
     <div class="debate-body">
 
-      <!-- Chat panel -->
+      <!-- LEFT COLUMN: Chat -->
       <div class="chat-panel">
+        <!--
+          Chat message container. Messages are appended here by JS
+          via insertAdjacentHTML("beforeend", html).
+
+          class="coaching-hidden" is the DEFAULT state — hides all
+          .coach-feedback elements. The Coach toggle button removes
+          this class to reveal them.
+
+          Messages are structured as:
+            <div class="msg ai|user">
+              <div class="msg-label">Opponent|You</div>
+              <div class="msg-bubble">text</div>
+              <div class="coach-feedback">...</div>  (AI messages only)
+            </div>
+        -->
         <div id="chat-messages" class="chat-messages coaching-hidden"></div>
+
+        <!-- Input bar pinned to bottom (border-top separates from messages) -->
         <div class="chat-input-bar">
+          <!--
+            Enter sends the message (handled by handleInputKey in JS).
+            Shift+Enter inserts a newline.
+            rows="2" sets initial height; resize: none in CSS prevents dragging.
+          -->
           <textarea
             id="user-input"
             placeholder="Make your argument..."
             rows="2"
             onkeydown="handleInputKey(event)"
           ></textarea>
+          <!-- Disabled during API calls via: sendBtn.disabled = true -->
           <button id="send-btn" class="btn-primary btn-send" onclick="sendMessage()">
             Send
           </button>
         </div>
       </div>
 
-      <!-- Notes panel -->
+      <!--
+        RIGHT COLUMN: Notes panel (alignment/debugging view).
+
+        Shows the model's internal tracking of arguments + observations.
+        Starts collapsed (class="collapsed" → width: 0, opacity: 0).
+        Notes toggle button removes .collapsed to slide it open.
+
+        Three <ul> lists are updated by renderNotesList() in JS,
+        which replaces all <li> children each time.
+
+        Data comes from session["notes"] on the backend — accumulated
+        server-side via list.extend(), not by the model.
+      -->
       <div id="notes-panel" class="notes-panel collapsed">
         <h3 class="notes-title">Internal Notes</h3>
         <p class="notes-subtitle">Alignment &amp; debugging view</p>
 
         <div class="notes-section">
           <h4>🟦 AI's Arguments</h4>
+          <!-- JS updates via: document.getElementById("notes-ai-points").innerHTML = ... -->
           <ul id="notes-ai-points" class="notes-list">
             <li class="empty">No arguments yet.</li>
           </ul>
@@ -126,15 +234,27 @@
     </div>
   </div>
 
+
   <!-- ============================================================= -->
-  <!-- REPORT CARD MODAL                                               -->
+  <!-- REPORT CARD MODAL — Overlays the debate screen                 -->
   <!-- ============================================================= -->
+  <!--
+    Full-screen overlay with backdrop blur. Hidden by default
+    (CSS: .overlay { display: none }). Shown when JS adds .active
+    (CSS: .overlay.active { display: flex }).
+
+    Content is rendered dynamically by renderReportCard() in JS.
+    The scores grid (#report-scores) is populated with score-row divs.
+    The takeaways list (#report-takeaways) is populated with <li> elements.
+  -->
   <div id="report-overlay" class="overlay">
     <div class="report-card">
       <h2>Report Card</h2>
+      <!-- Large grade letter — set by JS: el.textContent = "B+" -->
       <div id="report-grade" class="grade"></div>
       <p id="report-summary" class="report-summary"></p>
 
+      <!-- Score bars rendered dynamically by renderReportCard() -->
       <div id="report-scores" class="scores-grid"></div>
 
       <div class="report-section">
@@ -152,21 +272,27 @@
         <ul id="report-takeaways"></ul>
       </div>
 
+      <!-- Actions: download final notes + start over -->
       <div class="report-actions">
         <button class="btn-ghost" onclick="downloadNotes()">⬇ Download Notes</button>
+        <!-- resetApp() clears all state and shows the setup screen -->
         <button class="btn-primary" onclick="resetApp()">New Debate</button>
       </div>
     </div>
   </div>
 
+
   <!-- ============================================================= -->
-  <!-- LOADING OVERLAY                                                 -->
+  <!-- LOADING OVERLAY — Shown during OpenAI API calls                -->
   <!-- ============================================================= -->
+  <!-- Same overlay mechanism as report card: .active toggles display -->
   <div id="loading-overlay" class="overlay loading-overlay">
     <div class="spinner"></div>
+    <!-- Text updated by showLoading("Custom message...") -->
     <p id="loading-text">Thinking...</p>
   </div>
 
+  <!-- Load JS last so all DOM elements exist before the script runs -->
   <script src="/static/app.js"></script>
 </body>
 </html>
