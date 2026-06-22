@@ -2,7 +2,7 @@
    Toron Demo — Frontend Logic
    ================================================================
    Vanilla JS — no framework, no build step. Three screens:
-     1. Setup:  API key, topic, side, difficulty → POST /api/start
+     1. Setup:  API key, topic, side, opponent difficulty, coach strictness → POST /api/start
      2. Debate: Chat with opponent, toggle coach feedback + notes
      3. Report: Modal overlay with scores, generated via POST /api/end
 
@@ -74,7 +74,8 @@ async function startDebate() {
         api_key: apiKey,
         topic: topic,
         user_side: sideInput.value,    // "for" or "against"
-        difficulty: diffInput.value,    // "beginner", "intermediate", or "advanced"
+        opponent_difficulty: opponentDifficultyInput.value,
+        coach_difficulty: coachDifficultyInput.value,
       }),
     });
 
