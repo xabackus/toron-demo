@@ -19,7 +19,7 @@ API key is provided per-request from the browser. Never stored server-side.
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles      # serves CSS/JS/HTML from disk
-from fastapi.responses import FileResponse        # returns a single file (index.html)
+from fastapi.responses import FileResponse, StreamingResponse  # file + SSE streaming
 from pydantic import BaseModel                    # request validation + OpenAPI schema
 import json
 import uuid
@@ -170,10 +170,8 @@ You are a debate opponent arguing {ai_side} the motion: "{topic}".
 
 {opponent_difficulty}
 
-You MUST respond with valid JSON matching this schema (nothing else):
-{{
-  "debate_response": "<your argument / rebuttal, 2-4 paragraphs>"
-}}"""
+Respond with your argument directly in plain text (2-4 paragraphs).
+Do NOT wrap your response in JSON, markdown, or any other format."""
 
 COACH_SYSTEM_PROMPT = """\
 You are an expert debate coach silently observing a practice debate.
@@ -355,89 +353,110 @@ async def start_debate(req: StartDebate):
 @app.post("/api/message")
 async def send_message(req: SendMessage):
     """
-    Process one debate turn. Makes TWO sequential OpenAI calls:
+    Process one debate turn via Server-Sent Events (SSE).
 
-      1. OPPONENT — receives the student's message in its chat history,
-         returns a debate rebuttal.
+    Returns a stream of events instead of a single JSON response:
+      1. 'token' events — opponent's response, one chunk at a time
+      2. 'coach' event  — coaching feedback + cumulative notes
+      3. 'done' event   — turn number, signals stream complete
 
-      2. COACH — receives a formatted observation of both sides' arguments,
-         returns technique feedback + new notes for this turn.
+    The opponent streams in plain text (no JSON mode — can't incrementally
+    parse JSON tokens). The coach still uses JSON mode (non-streaming)
+    since it's a short structured response and the user is reading the
+    opponent's text while it runs.
 
-    Notes are accumulated server-side (list.extend), NOT by asking the model
-    to carry forward previous notes. Models don't do cumulative tracking
-    reliably — deterministic Python does.
+    This cuts perceived latency dramatically: the first token appears
+    in ~200ms instead of waiting 3-5 seconds for the full response.
     """
-    # Look up the session. 404 if the session_id doesn't exist
-    # (e.g., server restarted or the debate already ended).
+    # Validate session before entering the generator.
+    # HTTPException must be raised HERE, not inside the generator
+    # (StreamingResponse has already started by then).
     session = sessions.get(req.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # ---- 1. Opponent: debate response ----
-    # Append the student's message to the opponent's chat history.
-    # The opponent sees: system prompt → student msg 1 → its reply 1 → student msg 2 → ...
+    # Append the student's message to the opponent's chat history now,
+    # before the generator starts.
     session["opponent_history"].append({"role": "user", "content": req.message})
 
-    try:
-        # _call_openai returns (parsed_dict, raw_string).
-        # opp_result is the parsed JSON: {"debate_response": "..."}
-        # opp_raw is the raw string, stored in history so the model sees its own output.
-        opp_result, opp_raw = _call_openai(req.api_key, session["opponent_history"])
-    except HTTPException:
-        raise  # re-raise our own HTTPExceptions (502 for bad JSON)
-    except Exception as e:
-        # Catch OpenAI SDK errors (auth failures, rate limits, etc.)
-        raise HTTPException(status_code=400, detail=f"Opponent error: {e}")
+    # Capture the user's message for the coach observation (closures
+    # over req won't work reliably once the endpoint returns).
+    user_message = req.message
+    api_key = req.api_key
 
-    # Extract the debate text from the JSON response
-    debate_response = opp_result.get("debate_response", "")
+    def generate():
+        """
+        Synchronous SSE generator. FastAPI runs sync generators in a
+        thread pool, so this won't block the event loop.
 
-    # Store the raw JSON string as the assistant's message in history.
-    # The model expects to see its own prior outputs in the conversation.
-    session["opponent_history"].append({"role": "assistant", "content": opp_raw})
+        Yields SSE-formatted strings: "event: <type>\ndata: <json>\n\n"
+        """
+        from openai import OpenAI
 
-    # ---- 2. Coach: feedback + notes ----
-    # The coach doesn't participate in the debate — it observes.
-    # We format the exchange as a labeled observation, not as a chat message.
-    coach_observation = (
-        f"STUDENT: {req.message}\n\nOPPONENT: {debate_response}"
-    )
-    # Append as a "user" message in the coach's separate history.
-    # The coach sees: system prompt → obs 1 → its analysis 1 → obs 2 → ...
-    session["coach_history"].append({"role": "user", "content": coach_observation})
+        # ---- 1. Stream opponent response ----
+        try:
+            client = OpenAI(api_key=api_key)
+            stream = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=session["opponent_history"],
+                temperature=0.7,
+                stream=True,
+                # No response_format — opponent outputs plain text for streaming
+            )
 
-    try:
-        coach_result, coach_raw = _call_openai(req.api_key, session["coach_history"])
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Coach error: {e}")
+            # Accumulate the full response while streaming tokens to the client
+            full_response = ""
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    full_response += delta.content
+                    # Each token is an SSE event the frontend appends to the bubble
+                    yield f"event: token\ndata: {json.dumps({'t': delta.content})}\n\n"
 
-    # Store the coach's analysis in its history (for context in future turns)
-    session["coach_history"].append({"role": "assistant", "content": coach_raw})
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'detail': f'Opponent error: {e}'})}\n\n"
+            return
 
-    # ---- 3. Accumulate notes server-side ----
-    # The coach returns new_* fields containing only THIS turn's items.
-    # We .extend() the session's running lists to build the cumulative view.
-    # This is the key reliability fix: the model only identifies what's new,
-    # Python handles the accumulation. No more dropped notes.
-    new_notes = coach_result.get("notes", {})
-    session["notes"]["ai_points"].extend(new_notes.get("new_ai_points", []))
-    session["notes"]["student_points"].extend(new_notes.get("new_student_points", []))
-    session["notes"]["coach_observations"].extend(new_notes.get("new_coach_observations", []))
+        # Store the full response as plain text in the opponent's history.
+        # (No JSON wrapping — the opponent now speaks plain text.)
+        session["opponent_history"].append(
+            {"role": "assistant", "content": full_response}
+        )
 
-    session["turn_count"] += 1
+        # ---- 2. Coach: feedback + notes (non-streaming, JSON mode) ----
+        # The coach needs the full exchange to analyze, so it runs after
+        # the opponent finishes. The user is reading the opponent's text
+        # during this ~1-2 second window.
+        coach_observation = f"STUDENT: {user_message}\n\nOPPONENT: {full_response}"
+        session["coach_history"].append({"role": "user", "content": coach_observation})
 
-    # Return all three pieces to the frontend:
-    #   - debate_response → rendered in the chat as the opponent's message
-    #   - coach_feedback → rendered inline (hidden unless Coach toggle is on)
-    #   - notes → full cumulative lists, rendered in the side panel
-    return {
-        "debate_response": debate_response,
-        "coach_feedback": coach_result.get("coach_feedback", {}),
-        "notes": session["notes"],
-        "turn": session["turn_count"],
-    }
+        try:
+            coach_result, coach_raw = _call_openai(api_key, session["coach_history"])
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'detail': f'Coach error: {e}'})}\n\n"
+            return
+
+        session["coach_history"].append({"role": "assistant", "content": coach_raw})
+
+        # ---- 3. Accumulate notes server-side ----
+        new_notes = coach_result.get("notes", {})
+        session["notes"]["ai_points"].extend(new_notes.get("new_ai_points", []))
+        session["notes"]["student_points"].extend(new_notes.get("new_student_points", []))
+        session["notes"]["coach_observations"].extend(
+            new_notes.get("new_coach_observations", [])
+        )
+
+        session["turn_count"] += 1
+
+        # ---- 4. Send coach feedback + notes as a single event ----
+        yield f"event: coach\ndata: {json.dumps({'coach_feedback': coach_result.get('coach_feedback', {}), 'notes': session['notes']})}\n\n"
+
+        # ---- 5. Signal completion ----
+        yield f"event: done\ndata: {json.dumps({'turn': session['turn_count']})}\n\n"
+
+    # Return the SSE stream.
+    # media_type tells the browser this is an event stream, not JSON.
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @app.post("/api/end")
@@ -458,22 +477,14 @@ async def end_debate(req: EndDebate):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Build a clean transcript from the opponent's conversation history.
-    # We extract debate_response from the opponent's JSON responses
-    # to give the judge clean text, not raw JSON.
+    # Build a clean transcript from the opponent history.
+    # Opponent responses are plain text (streaming mode), no JSON to parse.
     lines = []
     for msg in session["opponent_history"]:
         if msg["role"] == "user":
-            # Student's raw text (no JSON wrapping)
             lines.append(f"STUDENT: {msg['content']}")
         elif msg["role"] == "assistant":
-            # Opponent's response is stored as raw JSON; extract the text
-            try:
-                parsed = json.loads(msg["content"])
-                lines.append(f"OPPONENT: {parsed.get('debate_response', '')}")
-            except (json.JSONDecodeError, TypeError):
-                # Fallback: use raw text if JSON parsing fails
-                lines.append(f"OPPONENT: {msg['content']}")
+            lines.append(f"OPPONENT: {msg['content']}")
 
     # Join with double newlines for readability in the judge's context
     transcript = "\n\n".join(lines)
