@@ -197,7 +197,7 @@ You MUST respond with valid JSON matching this schema (nothing else):
 {{
   "coach_feedback": {{
     "praise": "<what the student did well — technique and delivery>",
-    "criticism": "<what could improve, with specific suggestions>"
+    "criticism": "<what could improve, with specific suggestions. if the student used filler words such as 'umm' or 'like', reference this and discourage useage of such filler>"
   }},
   "notes": {{
     "new_student_points":     ["<each distinct claim or argument the STUDENT made this turn>"],
