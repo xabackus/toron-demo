@@ -106,13 +106,19 @@ async function startDebate() {
 
 
 /* ----------------------------------------------------------------
-   Send Message
+   Send Message (streaming)
    ----------------------------------------------------------------
-   Calls POST /api/message, which triggers TWO OpenAI calls on the
-   backend (opponent + coach). Returns:
-     - debate_response:  opponent's rebuttal (rendered in chat)
-     - coach_feedback:   praise + criticism (rendered inline, togglable)
-     - notes:            full cumulative notes (rendered in side panel)
+   Calls POST /api/message, which returns a Server-Sent Events (SSE)
+   stream instead of a single JSON response:
+
+     1. 'token' events — opponent's text, one chunk at a time (~200ms to first)
+     2. 'coach' event  — feedback + cumulative notes (after opponent finishes)
+     3. 'done' event   — turn number, signals stream complete
+     4. 'error' event  — if something went wrong server-side
+
+   SSE format: "event: <type>\ndata: <json>\n\n"
+   We parse these using fetch + ReadableStream (not EventSource, which
+   only supports GET requests).
    ---------------------------------------------------------------- */
 
 async function sendMessage() {
@@ -122,17 +128,30 @@ async function sendMessage() {
   // Don't send empty messages or if no session exists
   if (!message || !sessionId) return;
 
-  // Clear the textarea and reset its height immediately (before the API call)
+  // Clear the textarea immediately (before the API call)
   input.value = "";
   input.style.height = "auto";
 
-  // Show the user's message in the chat right away (don't wait for the API)
+  // Show the user's message in the chat right away
   appendUserMessage(message);
 
-  // Show a loading spinner while waiting for the two OpenAI calls
-  showLoading("Crafting a rebuttal...");
+  // Disable send button while streaming (re-enabled in finally block)
+  document.getElementById("send-btn").disabled = true;
+
+  // Create an empty opponent message bubble. We'll append tokens to it
+  // as they stream in, then attach coach feedback after.
+  const msgId = "msg-" + Date.now();
+  const bubbleId = "bubble-" + Date.now();
+  const container = document.getElementById("chat-messages");
+  container.insertAdjacentHTML("beforeend", `
+    <div class="msg ai" id="${msgId}">
+      <div class="msg-label">Opponent</div>
+      <div class="msg-bubble" id="${bubbleId}"></div>
+    </div>
+  `);
 
   try {
+    // POST request — response is an SSE stream, not JSON
     const res = await fetch("/api/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -148,26 +167,87 @@ async function sendMessage() {
       throw new Error(err.detail || `Server error ${res.status}`);
     }
 
-    // Response contains debate_response, coach_feedback, notes, turn
-    const data = await res.json();
+    // Read the SSE stream using the ReadableStream API.
+    // response.body.getReader() returns a reader that yields Uint8Array chunks.
+    // TextDecoder converts bytes to string. { stream: true } handles chunks
+    // that split a multi-byte character across two reads.
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    const bubble = document.getElementById(bubbleId);
 
-    // Render the opponent's message + coach feedback in the chat.
-    // Coach feedback is always in the DOM but hidden by default
-    // (CSS class .coaching-hidden hides all .coach-feedback elements).
-    appendAIMessage(data.debate_response, data.coach_feedback);
+    let buffer = "";  // accumulates incomplete SSE events
 
-    // Update the notes side panel with the latest cumulative notes.
-    // This replaces the entire panel content each time (not appending).
-    updateNotes(data.notes);
+    while (true) {
+      // reader.read() returns { done: bool, value: Uint8Array }
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    // Update the "Turn N" badge in the header
-    updateTurn(data.turn);
+      // Decode bytes to string and add to buffer
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE events are delimited by double newlines (\n\n).
+      // Split the buffer on \n\n to extract complete events.
+      // The last element may be incomplete — keep it in buffer.
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        if (!part.trim()) continue;
+
+        // Parse SSE event: "event: <type>\ndata: <json>"
+        let eventType = "";
+        let data = "";
+        for (const line of part.split("\n")) {
+          if (line.startsWith("event: ")) eventType = line.slice(7);
+          else if (line.startsWith("data: ")) data = line.slice(6);
+        }
+
+        if (eventType === "token") {
+          // Append this text chunk to the opponent's bubble.
+          // Using textContent += auto-escapes HTML (XSS-safe).
+          const { t } = JSON.parse(data);
+          bubble.textContent += t;
+          // Auto-scroll as tokens arrive
+          container.scrollTop = container.scrollHeight;
+
+        } else if (eventType === "coach") {
+          // Coach feedback + cumulative notes arrive as a single event
+          // after the opponent finishes streaming.
+          const { coach_feedback, notes } = JSON.parse(data);
+
+          // Append coach feedback below the opponent's bubble.
+          // Uses the message container ID to insert after the bubble.
+          if (coach_feedback && (coach_feedback.praise || coach_feedback.criticism)) {
+            const msgDiv = document.getElementById(msgId);
+            let html = `<div class="coach-feedback"><strong>Coach Feedback</strong>`;
+            if (coach_feedback.praise) {
+              html += `<div class="feedback-praise">${escapeHtml(coach_feedback.praise)}</div>`;
+            }
+            if (coach_feedback.criticism) {
+              html += `<div class="feedback-criticism">${escapeHtml(coach_feedback.criticism)}</div>`;
+            }
+            html += `</div>`;
+            msgDiv.insertAdjacentHTML("beforeend", html);
+          }
+
+          // Update the notes side panel
+          updateNotes(notes);
+
+        } else if (eventType === "done") {
+          const { turn } = JSON.parse(data);
+          updateTurn(turn);
+
+        } else if (eventType === "error") {
+          const { detail } = JSON.parse(data);
+          appendSystemMessage("Error: " + detail);
+        }
+      }
+    }
   } catch (e) {
-    // Show error inline in the chat (red-styled message)
     appendSystemMessage("Error: " + e.message);
   } finally {
-    // Hide the loading spinner whether the call succeeded or failed
-    hideLoading();
+    // Re-enable the send button
+    document.getElementById("send-btn").disabled = false;
   }
 }
 
