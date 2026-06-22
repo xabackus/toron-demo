@@ -102,7 +102,7 @@ You are a debate opponent arguing {ai_side} the motion: "{topic}".
 
 You MUST respond with valid JSON matching this schema (nothing else):
 {{
-  "debate_response": "<your argument / rebuttal, 1-4 paragraphs>"
+  "debate_response": "<your argument / rebuttal, 2-4 paragraphs>"
 }}"""
 
 COACH_SYSTEM_PROMPT = """\
@@ -126,13 +126,14 @@ You MUST respond with valid JSON matching this schema (nothing else):
     "criticism": "<what could improve, with specific suggestions>"
   }},
   "notes": {{
-    "ai_points":          ["<every key argument the OPPONENT has made, cumulative>"],
-    "student_points":     ["<every key argument the STUDENT has made, cumulative>"],
-    "coach_observations": ["<running observations about the student's patterns>"]
+    "new_ai_points":          ["<NEW arguments the opponent made THIS turn only>"],
+    "new_student_points":     ["<NEW arguments the student made THIS turn only>"],
+    "new_coach_observations": ["<NEW observations from THIS exchange only>"]
   }}
 }}
 
-Notes must be CUMULATIVE — carry forward ALL points from the entire debate."""
+Notes must contain ONLY what is new in this exchange. Do NOT repeat points
+from earlier turns — accumulation is handled externally."""
 
 REPORT_CARD_PROMPT = """\
 You are an expert debate coach producing a final report card.
@@ -249,13 +250,19 @@ async def send_message(req: SendMessage):
         raise HTTPException(status_code=400, detail=f"Coach error: {e}")
 
     session["coach_history"].append({"role": "assistant", "content": coach_raw})
-    session["notes"] = coach_result.get("notes", session["notes"])
+
+    # Accumulate notes server-side
+    new_notes = coach_result.get("notes", {})
+    session["notes"]["ai_points"].extend(new_notes.get("new_ai_points", []))
+    session["notes"]["student_points"].extend(new_notes.get("new_student_points", []))
+    session["notes"]["coach_observations"].extend(new_notes.get("new_coach_observations", []))
+
     session["turn_count"] += 1
 
     return {
         "debate_response": debate_response,
         "coach_feedback": coach_result.get("coach_feedback", {}),
-        "notes": coach_result.get("notes", {}),
+        "notes": session["notes"],
         "turn": session["turn_count"],
     }
 
